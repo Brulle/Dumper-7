@@ -25,21 +25,13 @@ constexpr inline std::array FFixedUObjectArrayLayouts =
 
 constexpr inline std::array FChunkedFixedUObjectArrayLayouts =
 {
-	FChunkedFixedUObjectArrayLayout // Default UE4.21 - UE5.7
+	FChunkedFixedUObjectArrayLayout // Default UE4.21 and above
 	{
 		.ObjectsOffset = 0x00,
 		.MaxElementsOffset = 0x10,
 		.NumElementsOffset = 0x14,
 		.MaxChunksOffset = 0x18,
 		.NumChunksOffset = 0x1C,
-	},
-	FChunkedFixedUObjectArrayLayout // UE5.8 Developement Build
-	{
-		.ObjectsOffset = 0x00, 
-		.MaxElementsOffset = 0x0C,
-		.NumElementsOffset = 0x08,
-		.MaxChunksOffset = 0x14,
-		.NumChunksOffset = 0x10,
 	},
 	FChunkedFixedUObjectArrayLayout // Back4Blood
 	{
@@ -260,7 +252,15 @@ void ObjectArray::Init(bool bScanAllMemory, const char* const ModuleName)
 	{
 		GObjectsAddress = Platform::IterateSectionWithCallback(Platform::GetSectionInfo(".data"), IsAddressValidGObjects, 0x4, 0x50);
 	}
-
+	
+	if (!GObjectsAddress) 
+	{
+		std::cerr << "Scanner came up empty. Falling back to 0x6FC07C0...\n";
+		uint8_t* BaseAddress = reinterpret_cast<uint8_t*>(Platform::GetModuleBase(ModuleName));
+		GObjectsAddress = reinterpret_cast<void*>(BaseAddress + 0x6FC07C0);
+       
+		bIsGObjectsChunked = true; 
+	}
 
 	if (GObjectsAddress)
 	{

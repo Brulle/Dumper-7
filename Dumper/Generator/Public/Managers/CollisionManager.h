@@ -136,7 +136,7 @@ public:
 	/* For external use by 'MemberManager::InitReservedNames()' */
 	void AddReservedClassName(const std::string& Name, bool bIsParameterOrLocalVariable);
 	void AddReservedName(const std::string& Name);
-	void AddStructToNameContainer(UEStruct ObjAsStruct, bool bIsStruct, bool bIsFunction = false);
+	void AddStructToNameContainer(UEStruct ObjAsStruct, bool bIsStruct);
 
 	std::string StringifyName(UEStruct Struct, NameInfo Info);
 
