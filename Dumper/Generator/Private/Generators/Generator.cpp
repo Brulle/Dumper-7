@@ -30,25 +30,55 @@ inline void InitSettings()
 
 void Generator::InitEngineCore()
 {
-    ObjectArray::Init(0x0000000, 0x10000, FChunkedFixedUObjectArrayLayout{}, nullptr);
-    
-    ObjectArray::Init();
-    CALL_PLATFORM_SPECIFIC_FUNCTION(FName::Init);
-    Off::Init();
-    PropertySizes::Init();
-    CALL_PLATFORM_SPECIFIC_FUNCTION(Off::InSDK::ProcessEvent::InitPE); 
-    Off::InSDK::World::InitGWorld(); 
-    Off::InSDK::Text::InitTextOffsets(); 
-    InitSettings();
+	/* manual override */
+	//ObjectArray::Init(/*GObjects*/, /*Layout = Default*/); // FFixedUObjectArray (UEVersion < UE4.21)
+	//ObjectArray::Init(/*GObjects*/, /*ChunkSize*/, /*Layout = Default*/); // FChunkedFixedUObjectArray (UEVersion >= UE4.21)
+
+	//FName::Init(/*bForceGNames = false*/);
+	//FName::Init(/*AppendString, FName::EOffsetOverrideType::AppendString*/);
+	//FName::Init(/*ToString, FName::EOffsetOverrideType::ToString*/);
+	//FName::Init(/*GNames, FName::EOffsetOverrideType::GNames, true/false*/);
+ 
+	//Off::InSDK::ProcessEvent::InitPE(/*PEIndex*/);
+
+	/* Back4Blood (requires manual GNames override) */
+	//InitObjectArrayDecryption([](void* ObjPtr) -> uint8* { return reinterpret_cast<uint8*>(uint64(ObjPtr) ^ 0x8375); });
+
+	/* Multiversus [Unsupported, weird GObjects-struct] */
+	//InitObjectArrayDecryption([](void* ObjPtr) -> uint8* { return reinterpret_cast<uint8*>(uint64(ObjPtr) ^ 0x1B5DEAFD6B4068C); });
+
+	ObjectArray::Init();
+
+	CALL_PLATFORM_SPECIFIC_FUNCTION(FName::Init);
+
+	Off::Init();
+	PropertySizes::Init();
+
+	CALL_PLATFORM_SPECIFIC_FUNCTION(Off::InSDK::ProcessEvent::InitPE); // Must be at this position, relies on offsets initialized in Off::Init()
+
+	Off::InSDK::World::InitGWorld(); // Must be at this position, relies on offsets initialized in Off::Init()
+
+	Off::InSDK::Text::InitTextOffsets(); // Must be at this position, relies on offsets initialized in Off::InitPE()
+
+	InitSettings();
 }
 
 void Generator::InitInternal()
 {
-    PackageManager::Init();
-    StructManager::Init();
-    EnumManager::Init();
-    MemberManager::Init();
-    PackageManager::PostInit();
+	// Initialize PackageManager with all packages, their names, structs, classes enums, functions and dependencies
+	PackageManager::Init();
+
+	// Initialize StructManager with all structs and their names
+	StructManager::Init();
+	
+	// Initialize EnumManager with all enums and their names
+	EnumManager::Init();
+	
+	// Initialized all Member-Name collisions
+	MemberManager::Init();
+
+	// Post-Initialize PackageManager after StructManager has been initialized. 'PostInit()' handles Cyclic-Dependencies detection
+	PackageManager::PostInit();
 }
 
 std::string ResolveHeaderPath(std::string IncludePath, std::string ModuleRelPath, const std::string& PackageName, const fs::path& DumperFolder)
