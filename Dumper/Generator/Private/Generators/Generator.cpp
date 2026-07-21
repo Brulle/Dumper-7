@@ -12,6 +12,7 @@
 
 #include <fstream>
 #include <unordered_map>
+#include <map>
 #include <string>
 #include <algorithm>
 #include <vector>
@@ -535,11 +536,19 @@ std::string GetPrecisePropertyType(UEProperty Prop, int32 NextOffset, const std:
     return Prop.GetCppType();
 }
 
+// One bucket per UE package, split further by kind, so the dump is many small
+// files (Metadata/<Package>/Classes.json etc.) instead of one huge JSON blob.
+struct MetadataPackageBucket
+{
+    nlohmann::ordered_json Classes = nlohmann::ordered_json::object();
+    nlohmann::ordered_json Structs = nlohmann::ordered_json::object();
+    nlohmann::ordered_json Enums = nlohmann::ordered_json::object();
+    nlohmann::ordered_json Delegates = nlohmann::ordered_json::object();
+};
+
 void DumpEditorOnlyMetadata(const fs::path& DumperFolder)
 {
-    nlohmann::ordered_json MetadataJson;
-    MetadataJson["GameName"] = Settings::Generator::GameName;
-    MetadataJson["GameVersion"] = Settings::Generator::GameVersion;
+    std::map<std::string, MetadataPackageBucket> PackageBuckets;
 
     struct alignas(0x4) Name08Byte { uint8 Pad[0x08]; };
     struct alignas(0x4) Name12Byte { uint8 Pad[0x0C]; };
@@ -655,7 +664,8 @@ void DumpEditorOnlyMetadata(const fs::path& DumperFolder)
         {
             UEFunction Delegate = Obj.Cast<UEFunction>();
             std::string CppName = Delegate.GetName();
-            auto& DelegateNode = MetadataJson[CppName];
+            auto& Bucket = PackageBuckets[PackageName.empty() ? "NoPackage" : PackageName];
+            auto& DelegateNode = Bucket.Delegates[CppName];
             
             DelegateNode["MemberType"] = "Delegate";
             EFunctionFlags FFlags = Delegate.GetFunctionFlags();
@@ -741,8 +751,10 @@ void DumpEditorOnlyMetadata(const fs::path& DumperFolder)
         {
             UEStruct Struct = Obj.Cast<UEStruct>();
             std::string CppName = Struct.GetCppName();
-            auto& StructNode = MetadataJson[CppName];
-            
+            bool bIsClassNode = Obj.IsA(EClassCastFlags::Class);
+            auto& Bucket = PackageBuckets[PackageName.empty() ? "NoPackage" : PackageName];
+            auto& StructNode = bIsClassNode ? Bucket.Classes[CppName] : Bucket.Structs[CppName];
+
             UEStruct Super = Struct.GetSuper();
             if (Super) StructNode["SuperStruct"] = Super.GetCppName();
             if (!PackageName.empty()) StructNode["Package"] = PackageName;
@@ -768,7 +780,7 @@ void DumpEditorOnlyMetadata(const fs::path& DumperFolder)
             if (!AbsPath.empty()) StructNode["AbsoluteHeaderPath"] = AbsPath;
 
             void* CDO = nullptr;
-            if (Obj.IsA(EClassCastFlags::Class))
+            if (bIsClassNode)
             {
                 StructNode["UHTMacro"] = bHasObjectInitializer ? "GENERATED_UCLASS_BODY()" : "GENERATED_BODY()";
                 UEClass Clss = Obj.Cast<UEClass>();
@@ -972,13 +984,18 @@ void DumpEditorOnlyMetadata(const fs::path& DumperFolder)
                 }
             }
             if (!MembersNode.empty()) StructNode["Members"] = MembersNode;
-            if (StructNode.empty()) MetadataJson.erase(CppName);
+            if (StructNode.empty())
+            {
+                if (bIsClassNode) Bucket.Classes.erase(CppName);
+                else Bucket.Structs.erase(CppName);
+            }
         }
         else if (Obj.IsA(EClassCastFlags::Enum))
         {
             UEEnum Enum = Obj.Cast<UEEnum>();
             std::string CppName = Enum.GetEnumPrefixedName();
-            auto& EnumNode = MetadataJson[CppName];
+            auto& Bucket = PackageBuckets[PackageName.empty() ? "NoPackage" : PackageName];
+            auto& EnumNode = Bucket.Enums[CppName];
             
             uint8 CppForm = *reinterpret_cast<uint8*>(static_cast<uint8*>(Enum.GetAddress()) + Off::UEnum::Names + 0x10);
             if (CppForm == 0) EnumNode["CppForm"] = "Regular";
@@ -1037,12 +1054,40 @@ void DumpEditorOnlyMetadata(const fs::path& DumperFolder)
                 }
                 if (!ValuesNode.empty()) EnumNode["Values"] = ValuesNode;
             }
-            if (EnumNode.empty()) MetadataJson.erase(CppName);
+            if (EnumNode.empty()) Bucket.Enums.erase(CppName);
         }
     }
-    
-    if (MetadataJson.size() > 2) {
-        std::ofstream MetadataFile(DumperFolder / "Metadata.json");
-        MetadataFile << MetadataJson.dump(4);
+
+    if (!PackageBuckets.empty() )
+    {
+        fs::path MetadataFolder = DumperFolder / "Metadata";
+        fs::create_directories(MetadataFolder);
+
+        nlohmann::ordered_json GameInfoJson;
+        GameInfoJson["GameName"] = Settings::Generator::GameName;
+        GameInfoJson["GameVersion"] = Settings::Generator::GameVersion;
+        std::ofstream GameInfoFile(MetadataFolder / "GameInfo.json");
+        GameInfoFile << GameInfoJson.dump(4);
+
+        for (auto& [PackageName, Bucket] : PackageBuckets)
+        {
+            std::string SafePackageName = PackageName;
+            FileNameHelper::MakeValidFileName(SafePackageName);
+
+            fs::path PackageFolder = MetadataFolder / SafePackageName;
+
+            auto DumpIfNotEmpty = [&](const nlohmann::ordered_json& Json, const std::string& FileName)
+            {
+                if (Json.empty()) return;
+                fs::create_directories(PackageFolder);
+                std::ofstream File(PackageFolder / FileName);
+                File << Json.dump(4);
+            };
+
+            DumpIfNotEmpty(Bucket.Classes, "Classes.json");
+            DumpIfNotEmpty(Bucket.Structs, "Structs.json");
+            DumpIfNotEmpty(Bucket.Enums, "Enums.json");
+            DumpIfNotEmpty(Bucket.Delegates, "Delegates.json");
+        }
     }
 }

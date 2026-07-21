@@ -615,7 +615,7 @@ std::string UEEnum::GetEnumPrefixedName() const
 
 std::string UEEnum::GetEnumTypeAsStr() const
 {
-	return "enum class " + GetEnumPrefixedName();
+	return GetEnumPrefixedName();
 }
 
 UEStruct UEStruct::GetSuper() const
@@ -1146,15 +1146,15 @@ std::string UEProperty::GetCppType() const
 	}
 	else if (TypeFlags & EClassCastFlags::NameProperty)
 	{
-		return "class FName";
+		return "FName";
 	}
 	else if (TypeFlags & EClassCastFlags::StrProperty)
 	{
-		return "class FString";
+		return "FString";
 	}
 	else if (TypeFlags & EClassCastFlags::TextProperty)
 	{
-		return "class FText";
+		return "FText";
 	}
 	else if (TypeFlags & EClassCastFlags::BoolProperty)
 	{
@@ -1298,7 +1298,7 @@ UEClass UEObjectProperty::GetPropertyClass() const
 
 std::string UEObjectProperty::GetCppType() const
 {
-	return std::format("class {}*", GetPropertyClass() ? GetPropertyClass().GetCppName() : "UObject");
+	return std::format("{}*", GetPropertyClass() ? GetPropertyClass().GetCppName() : "UObject");
 }
 
 UEClass UEClassProperty::GetMetaClass() const
@@ -1308,32 +1308,32 @@ UEClass UEClassProperty::GetMetaClass() const
 
 std::string UEClassProperty::GetCppType() const
 {
-	return HasPropertyFlags(EPropertyFlags::UObjectWrapper) ? std::format("TSubclassOf<class {}>", GetMetaClass().GetCppName()) : "class UClass*";
+	return HasPropertyFlags(EPropertyFlags::UObjectWrapper) ? std::format("TSubclassOf<{}>", GetMetaClass().GetCppName()) : "UClass*";
 }
 
 std::string UEWeakObjectProperty::GetCppType() const
 {
-	return std::format("TWeakObjectPtr<class {}>", GetPropertyClass() ? GetPropertyClass().GetCppName() : "UObject");
+	return std::format("TWeakObjectPtr<{}>", GetPropertyClass() ? GetPropertyClass().GetCppName() : "UObject");
 }
 
 std::string UELazyObjectProperty::GetCppType() const
 {
-	return std::format("TLazyObjectPtr<class {}>", GetPropertyClass() ? GetPropertyClass().GetCppName() : "UObject");
+	return std::format("TLazyObjectPtr<{}>", GetPropertyClass() ? GetPropertyClass().GetCppName() : "UObject");
 }
 
 std::string UESoftObjectProperty::GetCppType() const
 {
-	return std::format("TSoftObjectPtr<class {}>", GetPropertyClass() ? GetPropertyClass().GetCppName() : "UObject");
+	return std::format("TSoftObjectPtr<{}>", GetPropertyClass() ? GetPropertyClass().GetCppName() : "UObject");
 }
 
 std::string UESoftClassProperty::GetCppType() const
 {
-	return std::format("TSoftClassPtr<class {}>", GetMetaClass() ? GetMetaClass().GetCppName() : GetPropertyClass().GetCppName());
+	return std::format("TSoftClassPtr<{}>", GetMetaClass() ? GetMetaClass().GetCppName() : GetPropertyClass().GetCppName());
 }
 
 std::string UEInterfaceProperty::GetCppType() const
 {
-	return std::format("TScriptInterface<class {}>", GetPropertyClass().GetCppName());
+	return std::format("TScriptInterface<{}>", GetPropertyClass().GetCppName());
 }
 
 UEStruct UEStructProperty::GetUnderlayingStruct() const
@@ -1343,7 +1343,7 @@ UEStruct UEStructProperty::GetUnderlayingStruct() const
 
 std::string UEStructProperty::GetCppType() const
 {
-	return std::format("struct {}", GetUnderlayingStruct().GetCppName());
+	return GetUnderlayingStruct().GetCppName();
 }
 
 UEProperty UEArrayProperty::GetInnerProperty() const
@@ -1427,7 +1427,7 @@ UEFFieldClass UEFieldPathProperty::GetFieldClass() const
 
 std::string UEFieldPathProperty::GetCppType() const
 {
-	return std::format("TFieldPath<struct {}>", GetFieldClass().GetCppName());
+	return std::format("TFieldPath<{}>", GetFieldClass().GetCppName());
 }
 
 UEProperty UEOptionalProperty::GetValueProperty() const
